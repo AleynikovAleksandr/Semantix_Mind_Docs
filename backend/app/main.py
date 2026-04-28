@@ -16,7 +16,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"Запуск {settings.APP_NAME}...")
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
-    # Создаём таблицы если не существуют (только для dev; в prod — alembic)
+    # Создаём таблицы если не существуют
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("БД инициализирована.")

@@ -1,4 +1,4 @@
-.PHONY: help up down build restart migrate makemigration test logs shell flower docs
+.PHONY: help up down build restart test logs shell flower docs
 
 help:
 	@echo "Команды:"
@@ -6,8 +6,6 @@ help:
 	@echo "  make up           — запустить все сервисы"
 	@echo "  make down         — остановить"
 	@echo "  make restart      — перезапустить backend + worker"
-	@echo "  make migrate      — применить миграции БД"
-	@echo "  make makemigration msg=... — создать новую миграцию"
 	@echo "  make test         — запустить тесты"
 	@echo "  make logs         — логи backend + worker"
 	@echo "  make shell        — bash внутри backend контейнера"
@@ -26,11 +24,7 @@ down:
 restart:
 	docker compose restart backend worker
 
-migrate:
-	docker compose exec backend alembic upgrade head
 
-makemigration:
-	docker compose exec backend alembic revision --autogenerate -m "$(msg)"
 
 test:
 	docker compose exec backend pytest tests/ -v
