@@ -7,7 +7,7 @@ from loguru import logger
 
 from app.config import settings
 from app.database import engine, Base
-from app.api.routers import auth, documents, export
+from app.api.routers import auth, documents, export, search
 from app.utils.logging_middleware import RequestLoggingMiddleware
 
 
@@ -61,6 +61,7 @@ app.add_middleware(RequestLoggingMiddleware)
 app.include_router(auth.router,      prefix="/api/auth",      tags=["Auth"])
 app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
 app.include_router(export.router,    prefix="/api/export",    tags=["Export"])
+app.include_router(search.router,    prefix="/api/search",    tags=["Search"])
 
 
 @app.get("/health", tags=["System"], summary="Health check")
