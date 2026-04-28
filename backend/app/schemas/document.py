@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.models.document import DocumentStatus
 
 
@@ -50,7 +50,7 @@ class ThemeOut(BaseModel):
     keywords: Optional[str]
     order: int
     confidence: Optional[float]
-    segments: List[TopicSegmentOut] = []
+    segments: List[TopicSegmentOut] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -61,4 +61,4 @@ class DocumentResultResponse(BaseModel):
     raw_text: Optional[str]
     cleaned_text: Optional[str]
     ocr_confidence: Optional[float]
-    themes: List[ThemeOut] = []
+    themes: List[ThemeOut] = Field(default_factory=list)
