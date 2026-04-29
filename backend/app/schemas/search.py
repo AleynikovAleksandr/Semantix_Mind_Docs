@@ -8,5 +8,5 @@ class TextSearchResult(BaseModel):
 
 class SemanticSearchResult(BaseModel):
     document_id: int
-    theme_index: int
+    theme_id: int
     distance: float

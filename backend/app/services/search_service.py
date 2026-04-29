@@ -48,7 +48,7 @@ async def semantic_search(q: str, user_id: int, db: AsyncSession, limit: int = 2
     stmt = text(
         """
         SELECT tsi.document_id,
-               tsi.theme_index,
+               tsi.theme_id,
                (tsi.embedding <=> CAST(:embedding AS vector)) AS distance
         FROM topic_search_index tsi
         JOIN documents d ON d.id = tsi.document_id
@@ -68,7 +68,7 @@ async def semantic_search(q: str, user_id: int, db: AsyncSession, limit: int = 2
     return [
         {
             "document_id": int(r["document_id"]),
-            "theme_index": int(r["theme_index"]),
+            "theme_id": int(r["theme_id"]),
             "distance": float(r["distance"]),
         }
         for r in rows

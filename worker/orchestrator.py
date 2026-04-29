@@ -39,7 +39,7 @@ def _embed_text_for_search(text_value: str) -> str | None:
     return "[" + ",".join(f"{v:.8f}" for v in vector) + "]"
 
 
-def _upsert_search_index(db, document_id: int, cleaned_text: str, topics: list[dict]):
+def _upsert_search_index(db, document_id: int, cleaned_text: str, themes):
     # 1) Индекс всего документа (full-text)
     db.execute(
         text(
@@ -54,8 +54,8 @@ def _upsert_search_index(db, document_id: int, cleaned_text: str, topics: list[d
     )
 
     # 2) Индекс тем (full-text + embedding)
-    for theme_index, topic in enumerate(topics):
-        keywords_raw = topic.get("keywords")
+    for theme in themes:
+        keywords_raw = theme.keywords
         try:
             keywords = json.loads(keywords_raw) if keywords_raw else []
             if not isinstance(keywords, list):
@@ -63,9 +63,9 @@ def _upsert_search_index(db, document_id: int, cleaned_text: str, topics: list[d
         except Exception:
             keywords = []
 
-        segments = topic.get("segments") or []
+        segments = [segment.segment_text for segment in theme.segments]
         combined_text = " ".join(
-            [topic.get("label", ""), " ".join(keywords), " ".join(segments)]
+            [theme.theme_label or "", " ".join(keywords), " ".join(segments)]
         ).strip()
         embedding_literal = _embed_text_for_search(combined_text)
 
@@ -74,19 +74,19 @@ def _upsert_search_index(db, document_id: int, cleaned_text: str, topics: list[d
                 """
                 INSERT INTO topic_search_index (
                     document_id,
-                    theme_index,
+                    theme_id,
                     search_vector,
                     keywords,
                     embedding
                 )
                 VALUES (
                     :document_id,
-                    :theme_index,
+                    :theme_id,
                     to_tsvector('russian', :combined_text),
                     :keywords,
                     CAST(:embedding AS vector)
                 )
-                ON CONFLICT (document_id, theme_index) DO UPDATE
+                ON CONFLICT (theme_id) DO UPDATE
                 SET search_vector = EXCLUDED.search_vector,
                     keywords = EXCLUDED.keywords,
                     embedding = EXCLUDED.embedding
@@ -94,7 +94,7 @@ def _upsert_search_index(db, document_id: int, cleaned_text: str, topics: list[d
             ),
             {
                 "document_id": document_id,
-                "theme_index": theme_index,
+                "theme_id": theme.id,
                 "combined_text": combined_text,
                 "keywords": keywords,
                 "embedding": embedding_literal,
@@ -191,7 +191,7 @@ def _run_pipeline(document_id: int, db):
                     order=seg_order,
                 ))
 
-        _upsert_search_index(db, doc.id, cleaned_text, topics)
+        _upsert_search_index(db, doc.id, cleaned_text, doc.themes)
 
         elapsed = time.time() - start_time
         doc.processing_time = round(elapsed, 2)
