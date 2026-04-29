@@ -1,5 +1,7 @@
 import os
 from contextlib import asynccontextmanager
+import importlib.util
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,10 +13,33 @@ from app.api.routers import auth, documents, export, search
 from app.utils.logging_middleware import RequestLoggingMiddleware
 
 
+
+
+def _initialize_database_if_needed():
+    """Инициализирует БД через database/initial_data.py (если файл доступен)."""
+    script_path = Path(__file__).resolve().parents[2] / "database" / "initial_data.py"
+    if not script_path.exists():
+        logger.warning(f"DB init helper not found: {script_path}")
+        return
+
+    spec = importlib.util.spec_from_file_location("database.initial_data", script_path)
+    if spec is None or spec.loader is None:
+        logger.warning("Unable to load database/initial_data.py")
+        return
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    initializer = module.DBInitializer()
+    conn = initializer.create_database_and_switch()
+    conn.close()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Запуск {settings.APP_NAME}...")
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+
+    _initialize_database_if_needed()
 
     # Создаём таблицы если не существуют
     async with engine.begin() as conn:
