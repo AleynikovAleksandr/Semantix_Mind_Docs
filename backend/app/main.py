@@ -8,7 +8,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from app.config import settings
-from app.database import engine, Base
 from app.api.routers import auth, documents, export, search
 from app.utils.logging_middleware import RequestLoggingMiddleware
 
@@ -41,13 +40,7 @@ async def lifespan(app: FastAPI):
 
     _initialize_database_if_needed()
 
-    # Создаём таблицы если не существуют
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("БД инициализирована.")
     yield
-    logger.info("Завершение работы...")
-    await engine.dispose()
 
 
 app = FastAPI(
