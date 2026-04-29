@@ -1,25 +1,40 @@
 """Utility for PostgreSQL connection and database bootstrap."""
 
-import os
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import psycopg2
 from psycopg2.extensions import connection as PgConnection
 
+from app.config import settings
+
 
 @dataclass
 class DBConfig:
-    host: str = os.getenv("POSTGRES_HOST", "localhost")
-    port: int = int(os.getenv("POSTGRES_PORT", "5432"))
-    user: str = os.getenv("POSTGRES_USER", "docuser")
-    password: str = os.getenv("POSTGRES_PASSWORD", "docpassword")
-    maintenance_db: str = os.getenv("POSTGRES_MAINTENANCE_DB", "postgres")
-    app_db: str = os.getenv("POSTGRES_DB", "docprocessing")
+    host: str
+    port: int
+    user: str
+    password: str
+    maintenance_db: str
+    app_db: str
+
+    @classmethod
+    def from_settings(cls) -> "DBConfig":
+        parsed = urlparse(settings.sync_database_url)
+        app_db = (parsed.path or "/docprocessing").lstrip("/") or "docprocessing"
+        return cls(
+            host=parsed.hostname or "localhost",
+            port=parsed.port or 5432,
+            user=parsed.username or "docuser",
+            password=parsed.password or "docpassword",
+            maintenance_db="postgres",
+            app_db=app_db,
+        )
 
 
 class DBInitializer:
     def __init__(self, config: DBConfig | None = None):
-        self.config = config or DBConfig()
+        self.config = config or DBConfig.from_settings()
 
     def connect(self, db_name: str | None = None) -> PgConnection:
         """Метод 1: простое подключение к указанной БД."""
