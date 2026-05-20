@@ -32,6 +32,8 @@ sentence-transformers==3.0.0
 keybert==0.8.5
 scikit-learn==1.4.2
 numpy==1.26.4
+sentencepiece==0.2.0
+protobuf==5.27.2
 
 # Utils
 pydantic==2.7.1
