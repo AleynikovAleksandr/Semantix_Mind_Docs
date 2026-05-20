@@ -1,15 +1,34 @@
+import os
+
 import cv2
 import numpy as np
 import pytesseract
 from PIL import Image
-from pdf2image import convert_from_path
 from loguru import logger
-import os
+from pdf2image import convert_from_path
 
-# Настраиваем Tesseract
-_tesseract_cmd = os.getenv("TESSERACT_CMD", "/usr/bin/tesseract")
-_tesseract_lang = os.getenv("TESSERACT_LANG", "rus+eng")
-pytesseract.pytesseract.tesseract_cmd = _tesseract_cmd
+# ==========================
+# АБСОЛЮТНЫЕ ПУТИ
+# ==========================
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+TESSERACT_CMD = os.getenv(
+    "TESSERACT_CMD",
+    os.path.join(BASE_DIR, "worker", "model", "tesseract", "tesseract"),
+)
+
+TESSDATA_PREFIX = os.getenv(
+    "TESSDATA_PREFIX",
+    os.path.join(BASE_DIR, "worker", "model", "tesseract", "tessdata"),
+)
+
+TESS_LANG = os.getenv("TESSERACT_LANG", "rus+eng")
+
+pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+os.environ["TESSDATA_PREFIX"] = TESSDATA_PREFIX
+
+logger.info(f"Tesseract: {TESSERACT_CMD}")
+logger.info(f"Tessdata: {TESSDATA_PREFIX}")
 
 
 def _deskew(image: np.ndarray) -> np.ndarray:
@@ -27,9 +46,13 @@ def _deskew(image: np.ndarray) -> np.ndarray:
         return image
     h, w = image.shape[:2]
     M = cv2.getRotationMatrix2D((w // 2, h // 2), angle, 1.0)
-    return cv2.warpAffine(image, M, (w, h),
-                          flags=cv2.INTER_CUBIC,
-                          borderMode=cv2.BORDER_REPLICATE)
+    return cv2.warpAffine(
+        image,
+        M,
+        (w, h),
+        flags=cv2.INTER_CUBIC,
+        borderMode=cv2.BORDER_REPLICATE,
+    )
 
 
 def preprocess(img: np.ndarray) -> np.ndarray:
@@ -40,23 +63,22 @@ def preprocess(img: np.ndarray) -> np.ndarray:
     3. Адаптивная бинаризация
     4. Выравнивание наклона
     """
-    # 1. Серый
     if len(img.shape) == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
         gray = img.copy()
 
-    # 2. Денойзинг
     denoised = cv2.fastNlMeansDenoising(gray, h=10, templateWindowSize=7, searchWindowSize=21)
 
-    # 3. Адаптивная бинаризация (лучше для неравномерного освещения)
     binary = cv2.adaptiveThreshold(
-        denoised, 255,
+        denoised,
+        255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY, 11, 2
+        cv2.THRESH_BINARY,
+        11,
+        2,
     )
 
-    # 4. Deskew
     binary = _deskew(binary)
 
     return binary
@@ -66,11 +88,12 @@ def _ocr_single(img_array: np.ndarray) -> tuple[str, float]:
     """OCR одного изображения → (текст, уверенность)."""
     preprocessed = preprocess(img_array)
     pil_img = Image.fromarray(preprocessed)
-    config = f"--oem 3 --psm 3 -l {_tesseract_lang}"
+    config = f"--oem 3 --psm 3 -l {TESS_LANG}"
 
-    # Получаем данные с уверенностью
     data = pytesseract.image_to_data(
-        pil_img, config=config, output_type=pytesseract.Output.DICT
+        pil_img,
+        config=config,
+        output_type=pytesseract.Output.DICT,
     )
     text = pytesseract.image_to_string(pil_img, config=config)
 
@@ -98,7 +121,7 @@ def process_file(file_path: str, mime_type: str) -> tuple[str, float, int]:
             t, c = _ocr_single(img_array)
             texts.append(t)
             confidences.append(c)
-            logger.debug(f"  Страница {i+1}: confidence={c:.1f}%")
+            logger.debug(f"  Страница {i + 1}: confidence={c:.1f}%")
         page_count = len(pages)
     else:
         img = cv2.imread(file_path)
