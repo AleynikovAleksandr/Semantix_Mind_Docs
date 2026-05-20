@@ -1,4 +1,6 @@
 from functools import lru_cache
+
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,40 +8,37 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # App
-    APP_NAME: str = "Document Processing System"
-    DEBUG: bool = False
-    UPLOAD_DIR: str = "/app/uploads"
-    MAX_FILE_SIZE_MB: int = 50
+    APP_NAME: str = Field(...)
+    DEBUG: bool = Field(...)
+    UPLOAD_DIR: str = Field(...)
+    MAX_FILE_SIZE_MB: int = Field(...)
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://docuser:docpassword@db:5432/docprocessing"
+    DATABASE_URL: str = Field(...)
 
     # Redis / Celery
-    REDIS_URL: str = "redis://redis:6379/0"
-    CELERY_BROKER_URL: str = "redis://redis:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://redis:6379/1"
+    REDIS_URL: str = Field(...)
+    CELERY_BROKER_URL: str = Field(...)
+    CELERY_RESULT_BACKEND: str = Field(...)
 
     # JWT
-    JWT_SECRET_KEY: str = "change-me"
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    JWT_SECRET_KEY: str = Field(...)
+    JWT_ALGORITHM: str = Field(...)
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(...)
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(...)
 
     # Tesseract
-    TESSERACT_CMD: str = "/usr/bin/tesseract"
-    TESSERACT_LANG: str = "rus+eng"
+    TESSERACT_CMD: str = Field(...)
+    TESSERACT_LANG: str = Field(...)
 
     # NLP
-    EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    HF_HOME: str = "/root/.cache/huggingface"
+    EMBEDDING_MODEL: str = Field(...)
+    HF_HOME: str = Field(...)
 
     @property
     def sync_database_url(self) -> str:
         """Синхронный URL для Celery (psycopg2)."""
-        url = self.DATABASE_URL
-        # postgresql+asyncpg:// → postgresql://
-        url = url.replace("postgresql+asyncpg://", "postgresql://")
-        return url
+        return self.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
 
 
 @lru_cache
