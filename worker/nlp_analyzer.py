@@ -26,7 +26,7 @@ def _load_model():
         from keybert import KeyBERT
         import torch
 
-        model_path = "./worker/model/embeddinggemma-300m"
+        model_path = os.getenv("EMBEDDING_MODEL", "./worker/model/embeddinggemma-300m")
 
         logger.info(f"Загрузка embeddinggemma из {model_path}")
 
