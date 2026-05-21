@@ -36,7 +36,7 @@ class APIKeyCreate(BaseModel):
     name: str = Field(..., description="Название ключа, напр. 'Production'")
     expires_days: Optional[int] = Field(365, description="Срок жизни в днях, null = бессрочный")
     permissions: dict = Field(
-        default={"read": True, "write": True, "delete": False}
+        default_factory=lambda: {"read": True, "write": True, "delete": False}
     )
 
 
