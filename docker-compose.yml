@@ -2,16 +2,16 @@ version: "3.9"
 
 services:
   db:
-    image: postgres:15-alpine
+    image: postgres:17
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-docuser}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-docpassword}
       POSTGRES_DB: ${POSTGRES_DB:-docprocessing}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./data_warehouses/postgres:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5432:54344"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-docuser} -d ${POSTGRES_DB:-docprocessing}"]
       interval: 5s
@@ -19,10 +19,14 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
-    restart: always
+    image: redis/redis-stack:latest
+    container_name: redis_stack
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6379:6390"
+      - "8001:8096"
+    volumes:
+      - ./data_warehouses/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -38,8 +42,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./uploads:/app/uploads
-      - ./backend:/app
+      - ./data_warehouses/uploads:/app/uploads
+      - ./data_warehouses/backend_app:/app
     depends_on:
       db:
         condition: service_healthy
@@ -54,9 +58,9 @@ services:
     restart: always
     env_file: .env
     volumes:
-      - ./uploads:/app/uploads
-      - ./backend:/app
-      - hf_cache:/root/.cache/huggingface
+      - ./data_warehouses/uploads:/app/uploads
+      - ./data_warehouses/backend_app:/app
+      - ./data_warehouses/hf_cache:/root/.cache/huggingface
     depends_on:
       db:
         condition: service_healthy
@@ -77,9 +81,7 @@ services:
       CELERY_BROKER_URL: ${REDIS_URL:-redis://redis:6379/0}
     ports:
       - "5555:5555"
+    volumes:
+      - ./data_warehouses/flower:/data
     depends_on:
       - redis
-
-volumes:
-  postgres_data:
-  hf_cache:
