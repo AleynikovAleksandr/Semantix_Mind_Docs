@@ -9,7 +9,7 @@ services:
     volumes:
       - ./data_warehouses/postgres:/var/lib/postgresql/data
     ports:
-      - "5432:54344"
+      - "54344:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-docuser} -d ${POSTGRES_DB:-docprocessing}"]
       interval: 5s
@@ -21,8 +21,8 @@ services:
     container_name: redis_stack
     restart: unless-stopped
     ports:
-      - "6379:6390"
-      - "8001:8096"
+      - "6390:6379"
+      - "8096:8001"
     volumes:
       - ./data_warehouses/redis:/data
     healthcheck:
