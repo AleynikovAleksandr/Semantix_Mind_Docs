@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     curl \
+    bash \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -23,6 +24,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
 COPY database ./database
 COPY worker ./worker
+COPY scripts ./scripts
+
+ARG DOWNLOAD_EMBEDDING_MODEL=0
+RUN DOWNLOAD_EMBEDDING_MODEL=${DOWNLOAD_EMBEDDING_MODEL} bash scripts/setup_worker_assets.sh
 
 RUN mkdir -p /app/uploads /app/core/logging
 

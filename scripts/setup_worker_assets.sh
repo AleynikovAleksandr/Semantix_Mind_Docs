@@ -8,11 +8,16 @@ EMBEDDING_DIR="${MODEL_DIR}/embeddinggemma-300m"
 TESSERACT_DIR="${MODEL_DIR}/tesseract"
 TESSDATA_DIR="${TESSERACT_DIR}/tessdata"
 HF_MODEL_ID="${HF_MODEL_ID:-google/embeddinggemma-300m}"
+DOWNLOAD_EMBEDDING_MODEL="${DOWNLOAD_EMBEDDING_MODEL:-0}"
 
-mkdir -p "${EMBEDDING_DIR}" "${TESSDATA_DIR}"
+mkdir -p "${EMBEDDING_DIR}" "${TESSERACT_DIR}" "${TESSDATA_DIR}"
 
-echo "[1/3] Downloading embedding model: ${HF_MODEL_ID}"
-python - <<'PY'
+echo "[1/3] Checking embedding model directory: ${EMBEDDING_DIR}"
+if [ -f "${EMBEDDING_DIR}/config.json" ] || [ -f "${EMBEDDING_DIR}/model.safetensors" ]; then
+    echo "Embedding model files already exist; skipping download."
+elif [ "${DOWNLOAD_EMBEDDING_MODEL}" = "1" ]; then
+    echo "Downloading embedding model: ${HF_MODEL_ID}"
+    python - <<'PY'
 import os
 import subprocess
 import sys
@@ -36,6 +41,9 @@ snapshot_download(
 )
 print(f"Embedding model downloaded to: {local_dir}")
 PY
+else
+    echo "Embedding model download disabled (set DOWNLOAD_EMBEDDING_MODEL=1 to download)."
+fi
 
 echo "[2/3] Preparing local Tesseract binary"
 if command -v tesseract >/dev/null 2>&1; then
@@ -43,28 +51,42 @@ if command -v tesseract >/dev/null 2>&1; then
     chmod +x "${TESSERACT_DIR}/tesseract"
     echo "Copied tesseract binary to: ${TESSERACT_DIR}/tesseract"
 else
-    cat >&2 <<'MSG'
-Tesseract binary was not found in PATH.
-Install it first, for example:
-  Ubuntu/Debian: sudo apt-get update && sudo apt-get install -y tesseract-ocr
-  macOS:         brew install tesseract
-Then re-run this script.
-MSG
-    exit 1
+    echo "WARNING: tesseract binary was not found in PATH; leaving existing file if present." >&2
 fi
 
-echo "[3/3] Downloading tessdata language files"
-curl -fL "https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata" -o "${TESSDATA_DIR}/eng.traineddata"
-curl -fL "https://github.com/tesseract-ocr/tessdata/raw/main/rus.traineddata" -o "${TESSDATA_DIR}/rus.traineddata"
+echo "[3/3] Preparing tessdata language files"
+TESSDATA_SOURCE=""
+for candidate in \
+    "${TESSDATA_PREFIX:-}" \
+    "/usr/share/tesseract-ocr/5/tessdata" \
+    "/usr/share/tesseract-ocr/4.00/tessdata" \
+    "/usr/share/tessdata"; do
+    if [ -n "${candidate}" ] && [ -d "${candidate}" ]; then
+        TESSDATA_SOURCE="${candidate}"
+        break
+    fi
+done
+
+if [ -n "${TESSDATA_SOURCE}" ]; then
+    for lang in eng rus; do
+        if [ -f "${TESSDATA_SOURCE}/${lang}.traineddata" ]; then
+            cp "${TESSDATA_SOURCE}/${lang}.traineddata" "${TESSDATA_DIR}/${lang}.traineddata"
+            echo "Copied ${lang}.traineddata from ${TESSDATA_SOURCE}"
+        else
+            echo "WARNING: ${lang}.traineddata not found in ${TESSDATA_SOURCE}" >&2
+        fi
+    done
+else
+    echo "WARNING: system tessdata directory was not found; install tesseract language packages first." >&2
+fi
 
 cat <<MSG
 
 Done.
-Created/updated:
+Prepared paths:
   ${EMBEDDING_DIR}
   ${TESSERACT_DIR}/tesseract
-  ${TESSDATA_DIR}/eng.traineddata
-  ${TESSDATA_DIR}/rus.traineddata
+  ${TESSDATA_DIR}
 
 Recommended .env values:
   EMBEDDING_MODEL=/app/worker/model/embeddinggemma-300m
