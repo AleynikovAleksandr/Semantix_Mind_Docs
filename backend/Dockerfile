@@ -17,11 +17,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY backend/app ./app
+COPY database ./database
+COPY worker ./worker
 
-RUN mkdir -p /app/uploads
+RUN mkdir -p /app/uploads /app/core/logging
 
 EXPOSE 8000

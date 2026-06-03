@@ -29,13 +29,13 @@ def _embed_text_for_search(text_value: str) -> str | None:
     if not text_value or not text_value.strip():
         return None
 
-    from worker.nlp_analyzer import _load_model
+    from worker.nlp_analyzer import _encode, _load_model
 
     model = _load_model()
     if model in (None, "fallback"):
         return None
 
-    vector = model.encode([text_value], show_progress_bar=False)[0].tolist()
+    vector = _encode([text_value], model)[0].tolist()
     return "[" + ",".join(f"{v:.8f}" for v in vector) + "]"
 
 

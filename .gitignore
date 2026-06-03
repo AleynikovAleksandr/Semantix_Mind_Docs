@@ -144,3 +144,6 @@ cython_debug/
 # OS
 .DS_Store
 Thumbs.db
+
+# Runtime Docker data
+data_warehouses/
