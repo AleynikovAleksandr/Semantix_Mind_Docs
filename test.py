@@ -1,4 +1,4 @@
-"""Manual smoke script for all public API endpoints.
+"""Manual smoke script for all real project API endpoints.
 
 Run after the stack is up:
     docker compose up --build -d
@@ -11,7 +11,8 @@ Optional environment variables:
     TEST_FULL_NAME="Test User"
     TEST_FILE_PATH=/path/to/file.pdf   # if omitted, a tiny PNG is generated
     TEST_DOCUMENT_ID=1                 # use an existing/processed document for results/export
-    TEST_DELETE_DOCUMENT=1             # enable DELETE /api/documents/{id}
+    TEST_DELETE_DOCUMENT=1             # enable DELETE /api/documents/{doc_id}
+    TEST_TIMEOUT=30
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import httpx
 
@@ -35,14 +36,51 @@ TEST_DELETE_DOCUMENT = os.getenv("TEST_DELETE_DOCUMENT", "0") == "1"
 TIMEOUT = float(os.getenv("TEST_TIMEOUT", "30"))
 
 
+class Endpoint(NamedTuple):
+    method: str
+    path: str
+    note: str = ""
+
+
+# This inventory mirrors only the application routes declared in
+# backend/app/main.py and backend/app/api/routers/*.py. FastAPI-generated
+# documentation/schema routes (/docs, /redoc, /openapi.json) are intentionally
+# not counted here because they are framework utility routes, not project API
+# endpoints.
+PROJECT_ENDPOINTS: tuple[Endpoint, ...] = (
+    Endpoint("GET", "/health"),
+    Endpoint("POST", "/api/auth/register"),
+    Endpoint("POST", "/api/auth/login"),
+    Endpoint("POST", "/api/auth/refresh"),
+    Endpoint("POST", "/api/auth/logout"),
+    Endpoint("GET", "/api/auth/me"),
+    Endpoint("POST", "/api/auth/api-keys"),
+    Endpoint("GET", "/api/auth/api-keys"),
+    Endpoint("DELETE", "/api/auth/api-keys/{key_id}"),
+    Endpoint("POST", "/api/documents/upload"),
+    Endpoint("GET", "/api/documents/"),
+    Endpoint("GET", "/api/documents/{doc_id}/status"),
+    Endpoint("GET", "/api/documents/{doc_id}/results"),
+    Endpoint("DELETE", "/api/documents/{doc_id}", "Skipped unless TEST_DELETE_DOCUMENT=1"),
+    Endpoint("GET", "/api/export/{doc_id}/txt"),
+    Endpoint("GET", "/api/export/{doc_id}/json"),
+    Endpoint("GET", "/api/export/{doc_id}/csv"),
+    Endpoint("GET", "/api/search/text"),
+    Endpoint("GET", "/api/search/semantic"),
+)
+
+
 class ApiSmoke:
     def __init__(self) -> None:
-        self.client = httpx.Client(base_url=BASE_URL, timeout=TIMEOUT)
+        self.client = httpx.Client(base_url=BASE_URL, timeout=TIMEOUT, follow_redirects=True)
         self.access_token: str | None = None
         self.refresh_token: str | None = None
         self.api_key_id: int | None = None
+        self.raw_api_key: str | None = None
         self.document_id: int | None = int(TEST_DOCUMENT_ID) if TEST_DOCUMENT_ID else None
         self._temp_file: str | None = None
+        self.visited: set[tuple[str, str]] = set()
+        self.skipped: dict[tuple[str, str], str] = {}
 
     def close(self) -> None:
         if self._temp_file:
@@ -54,6 +92,16 @@ class ApiSmoke:
         if not self.access_token:
             return {}
         return {"Authorization": f"Bearer {self.access_token}"}
+
+    @property
+    def api_key_headers(self) -> dict[str, str]:
+        if not self.raw_api_key:
+            return {}
+        return {"X-API-Key": self.raw_api_key}
+
+    def mark_skip(self, method: str, path: str, reason: str) -> None:
+        self.skipped[(method, path)] = reason
+        print(f"\nSKIP {method} {path}: {reason}")
 
     def print_response(self, name: str, response: httpx.Response) -> None:
         print(f"\n{name}")
@@ -70,8 +118,16 @@ class ApiSmoke:
 
     def require_success(self, name: str, response: httpx.Response, allowed: tuple[int, ...] = (200,)) -> None:
         self.print_response(name, response)
+        method, path = name.split(" ", 1)
+        self.visited.add((method, path))
         if response.status_code not in allowed:
             raise RuntimeError(f"{name} failed: expected {allowed}, got {response.status_code}")
+
+    def print_endpoint_inventory(self) -> None:
+        print("\nProject endpoint inventory covered by this smoke script:")
+        for endpoint in PROJECT_ENDPOINTS:
+            suffix = f" — {endpoint.note}" if endpoint.note else ""
+            print(f"- {endpoint.method} {endpoint.path}{suffix}")
 
     def health(self) -> None:
         response = self.client.get("/health")
@@ -118,15 +174,21 @@ class ApiSmoke:
             },
         )
         self.require_success("POST /api/auth/api-keys", response, allowed=(201,))
-        self.api_key_id = response.json()["id"]
+        payload = response.json()
+        self.api_key_id = payload["id"]
+        self.raw_api_key = payload["key"]
 
     def list_api_keys(self) -> None:
         response = self.client.get("/api/auth/api-keys", headers=self.auth_headers)
         self.require_success("GET /api/auth/api-keys", response)
 
+    def me_with_api_key(self) -> None:
+        response = self.client.get("/api/auth/me", headers=self.api_key_headers)
+        self.require_success("GET /api/auth/me", response)
+
     def delete_api_key(self) -> None:
         if self.api_key_id is None:
-            print("\nSKIP DELETE /api/auth/api-keys/{key_id}: no API key was created")
+            self.mark_skip("DELETE", "/api/auth/api-keys/{key_id}", "no API key was created")
             return
         response = self.client.delete(f"/api/auth/api-keys/{self.api_key_id}", headers=self.auth_headers)
         self.require_success("DELETE /api/auth/api-keys/{key_id}", response, allowed=(204,))
@@ -173,14 +235,14 @@ class ApiSmoke:
 
     def document_status(self) -> None:
         if self.document_id is None:
-            print("\nSKIP GET /api/documents/{doc_id}/status: no document id")
+            self.mark_skip("GET", "/api/documents/{doc_id}/status", "no document id")
             return
         response = self.client.get(f"/api/documents/{self.document_id}/status", headers=self.auth_headers)
         self.require_success("GET /api/documents/{doc_id}/status", response)
 
     def document_results(self) -> None:
         if self.document_id is None:
-            print("\nSKIP GET /api/documents/{doc_id}/results: no document id")
+            self.mark_skip("GET", "/api/documents/{doc_id}/results", "no document id")
             return
         response = self.client.get(f"/api/documents/{self.document_id}/results", headers=self.auth_headers)
         # 400 is expected when the document is still queued/processing/error after upload.
@@ -197,7 +259,8 @@ class ApiSmoke:
 
     def _export(self, title: str, fmt: str) -> None:
         if self.document_id is None:
-            print(f"\nSKIP {title}: no document id")
+            method, path = title.split(" ", 1)
+            self.mark_skip(method, path, "no document id")
             return
         response = self.client.get(f"/api/export/{self.document_id}/{fmt}", headers=self.auth_headers)
         # 400 is expected when the document is not processed yet.
@@ -208,16 +271,19 @@ class ApiSmoke:
         self.require_success("GET /api/search/text", response)
 
     def search_semantic(self) -> None:
-        response = self.client.get("/api/search/semantic", headers=self.auth_headers, params={"q": "тестовый документ", "limit": 10})
-        # Semantic search can fail if pgvector/model assets are not ready; keep it visible as a smoke result.
+        response = self.client.get(
+            "/api/search/semantic",
+            headers=self.auth_headers,
+            params={"q": "тестовый документ", "limit": 10},
+        )
         self.require_success("GET /api/search/semantic", response)
 
     def delete_document(self) -> None:
         if not TEST_DELETE_DOCUMENT:
-            print("\nSKIP DELETE /api/documents/{doc_id}: set TEST_DELETE_DOCUMENT=1 to delete the document")
+            self.mark_skip("DELETE", "/api/documents/{doc_id}", "set TEST_DELETE_DOCUMENT=1 to delete the document")
             return
         if self.document_id is None:
-            print("\nSKIP DELETE /api/documents/{doc_id}: no document id")
+            self.mark_skip("DELETE", "/api/documents/{doc_id}", "no document id")
             return
         response = self.client.delete(f"/api/documents/{self.document_id}", headers=self.auth_headers)
         self.require_success("DELETE /api/documents/{doc_id}", response, allowed=(204, 409))
@@ -226,7 +292,25 @@ class ApiSmoke:
         response = self.client.post("/api/auth/logout", headers=self.auth_headers)
         self.require_success("POST /api/auth/logout", response)
 
+    def assert_endpoint_inventory_covered(self) -> None:
+        missing = []
+        for endpoint in PROJECT_ENDPOINTS:
+            key = (endpoint.method, endpoint.path)
+            if key not in self.visited and key not in self.skipped:
+                missing.append(endpoint)
+
+        print("\nEndpoint coverage summary:")
+        print(f"covered={len(self.visited)} skipped={len(self.skipped)} total={len(PROJECT_ENDPOINTS)}")
+        if self.skipped:
+            print("Skipped endpoints:")
+            for (method, path), reason in sorted(self.skipped.items()):
+                print(f"- {method} {path}: {reason}")
+        if missing:
+            printable = ", ".join(f"{endpoint.method} {endpoint.path}" for endpoint in missing)
+            raise RuntimeError(f"Smoke script did not cover these endpoints: {printable}")
+
     def run_all(self) -> None:
+        self.print_endpoint_inventory()
         self.health()
         self.register()
         self.login()
@@ -234,6 +318,7 @@ class ApiSmoke:
         self.me()
         self.create_api_key()
         self.list_api_keys()
+        self.me_with_api_key()
         self.upload_document()
         self.list_documents()
         self.document_status()
@@ -246,6 +331,7 @@ class ApiSmoke:
         self.delete_api_key()
         self.delete_document()
         self.logout()
+        self.assert_endpoint_inventory_covered()
 
 
 if __name__ == "__main__":

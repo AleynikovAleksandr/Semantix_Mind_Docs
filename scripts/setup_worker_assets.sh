@@ -3,6 +3,48 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export ROOT_DIR
+ROOT_ENV_FILE="${ROOT_DIR}/.env"
+
+_load_root_env_var() {
+    local name="$1"
+    local current_value="${!name:-}"
+
+    if [ -n "${current_value}" ] || [ ! -f "${ROOT_ENV_FILE}" ]; then
+        return
+    fi
+
+    local value
+    value="$(python - "${ROOT_ENV_FILE}" "${name}" <<'PY'
+import sys
+from pathlib import Path
+
+env_file = Path(sys.argv[1])
+name = sys.argv[2]
+
+for raw_line in env_file.read_text().splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    key, value = line.split("=", 1)
+    if key.strip() != name:
+        continue
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    print(value)
+    break
+PY
+)"
+
+    if [ -n "${value}" ]; then
+        export "${name}=${value}"
+    fi
+}
+
+_load_root_env_var HF_TOKEN
+_load_root_env_var HF_MODEL_ID
+_load_root_env_var DOWNLOAD_EMBEDDING_MODEL
+
 MODEL_DIR="${ROOT_DIR}/worker/model"
 EMBEDDING_DIR="${MODEL_DIR}/embeddinggemma-300m"
 TESSERACT_DIR="${MODEL_DIR}/tesseract"
