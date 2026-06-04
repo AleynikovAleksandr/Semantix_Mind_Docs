@@ -18,18 +18,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY backend/requirements.txt ./requirements.txt
+COPY worker/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/app ./app
-COPY database ./database
 COPY worker ./worker
 COPY scripts ./scripts
 
-ARG DOWNLOAD_EMBEDDING_MODEL=1
-ARG HF_TOKEN
-RUN HF_TOKEN=${HF_TOKEN} DOWNLOAD_EMBEDDING_MODEL=${DOWNLOAD_EMBEDDING_MODEL} bash scripts/setup_worker_assets.sh
+RUN bash scripts/setup_worker_assets.sh
 
 RUN mkdir -p /app/uploads /app/core/logging
-
-EXPOSE 8000
