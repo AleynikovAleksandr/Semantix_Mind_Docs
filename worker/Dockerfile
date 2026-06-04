@@ -25,6 +25,4 @@ COPY backend/app ./app
 COPY worker ./worker
 COPY scripts ./scripts
 
-RUN bash scripts/setup_worker_assets.sh
-
 RUN mkdir -p /app/uploads /app/core/logging
