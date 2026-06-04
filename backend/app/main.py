@@ -12,11 +12,14 @@ from app.api.routers import auth, documents, export, search
 from app.utils.logging_middleware import RequestLoggingMiddleware
 
 
+def _database_init_script_path() -> Path:
+    """Return the database initializer path from the project root database directory."""
+    return Path.cwd() / "database" / "initial_data.py"
 
 
 def _initialize_database_if_needed():
-    """Инициализирует БД через database/initial_data.py (если файл доступен)."""
-    script_path = Path(__file__).resolve().parents[2] / "database" / "initial_data.py"
+    """Инициализирует БД и применяет database/schema.sql при старте приложения."""
+    script_path = _database_init_script_path()
     if not script_path.exists():
         logger.warning(f"DB init helper not found: {script_path}")
         return
@@ -30,8 +33,9 @@ def _initialize_database_if_needed():
     spec.loader.exec_module(module)
 
     initializer = module.DBInitializer()
-    conn = initializer.create_database_and_switch()
-    conn.close()
+    initializer.initialize()
+    logger.info("Database schema initialized")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

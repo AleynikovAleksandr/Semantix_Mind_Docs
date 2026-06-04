@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:17
+    image: pgvector/pgvector:pg17
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-docuser}
@@ -35,6 +35,9 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        DOWNLOAD_EMBEDDING_MODEL: ${DOWNLOAD_EMBEDDING_MODEL:-1}
+        HF_TOKEN: ${HF_TOKEN:-}
     restart: always
     env_file: .env
     ports:
@@ -52,7 +55,7 @@ services:
   worker:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: worker/Dockerfile
     restart: always
     env_file: .env
     volumes:
