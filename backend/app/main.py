@@ -12,25 +12,16 @@ from app.api.routers import auth, documents, export, search
 from app.utils.logging_middleware import RequestLoggingMiddleware
 
 
-def _database_init_script_path() -> Path | None:
-    """Find database/initial_data.py both in repo layout and Docker /app layout."""
-    current_file = Path(__file__).resolve()
-    candidates = [
-        current_file.parents[2] / "database" / "initial_data.py",
-        current_file.parents[1] / "database" / "initial_data.py",
-        Path.cwd() / "database" / "initial_data.py",
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return None
+def _database_init_script_path() -> Path:
+    """Return the database initializer path from the project root database directory."""
+    return Path.cwd() / "database" / "initial_data.py"
 
 
 def _initialize_database_if_needed():
     """Инициализирует БД и применяет database/schema.sql при старте приложения."""
     script_path = _database_init_script_path()
-    if script_path is None:
-        logger.warning("DB init helper not found in repo or Docker paths")
+    if not script_path.exists():
+        logger.warning(f"DB init helper not found: {script_path}")
         return
 
     spec = importlib.util.spec_from_file_location("database.initial_data", script_path)
@@ -44,6 +35,7 @@ def _initialize_database_if_needed():
     initializer = module.DBInitializer()
     initializer.initialize()
     logger.info("Database schema initialized")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
