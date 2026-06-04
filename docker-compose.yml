@@ -1,6 +1,6 @@
 services:
   db:
-    image: pgvector/pgvector:pg17
+    image: postgres:17
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-docuser}
@@ -18,7 +18,7 @@ services:
 
   redis:
     image: redis/redis-stack:latest
-    container_name: redis_stack
+    container_name: redis_stack_master
     restart: unless-stopped
     ports:
       - "6390:6379"
