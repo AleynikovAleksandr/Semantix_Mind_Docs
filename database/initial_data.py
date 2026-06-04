@@ -1,6 +1,7 @@
-"""Utility for PostgreSQL connection and database bootstrap."""
+"""Utility for PostgreSQL connection, database bootstrap, and schema setup."""
 
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlparse
 
 import psycopg2
@@ -62,3 +63,22 @@ class DBInitializer:
 
         maintenance_conn.close()
         return self.connect(self.config.app_db)
+
+    def apply_schema(self, conn: PgConnection, schema_path: Path | None = None) -> None:
+        """Apply database/schema.sql so all tables exist on application startup."""
+        schema_path = schema_path or Path(__file__).with_name("schema.sql")
+        if not schema_path.exists():
+            raise FileNotFoundError(f"Database schema file not found: {schema_path}")
+
+        sql = schema_path.read_text(encoding="utf-8")
+        with conn.cursor() as cur:
+            cur.execute(sql)
+        conn.commit()
+
+    def initialize(self) -> None:
+        """Create the application database if needed and apply the SQL schema."""
+        conn = self.create_database_and_switch()
+        try:
+            self.apply_schema(conn)
+        finally:
+            conn.close()
