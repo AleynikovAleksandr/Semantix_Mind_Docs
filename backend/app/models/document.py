@@ -39,7 +39,13 @@ class Document(Base):
         ForeignKey("files.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[DocumentStatus] = mapped_column(
-        Enum(DocumentStatus), default=DocumentStatus.UPLOADED, index=True
+        Enum(
+            DocumentStatus,
+            name="document_status",
+            values_callable=lambda obj: [e.value for e in obj],
+        ),
+        default=DocumentStatus.UPLOADED,
+        index=True,
     )
     celery_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
