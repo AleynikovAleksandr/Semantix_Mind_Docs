@@ -147,3 +147,4 @@ Thumbs.db
 
 # Runtime Docker data
 data_warehouses/
+.DS_Store
