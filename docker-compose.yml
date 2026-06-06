@@ -35,9 +35,6 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-      args:
-        DOWNLOAD_EMBEDDING_MODEL: ${DOWNLOAD_EMBEDDING_MODEL:-1}
-        HF_TOKEN: ${HF_TOKEN:-}
     restart: always
     env_file: .env
     ports:
@@ -56,6 +53,9 @@ services:
     build:
       context: .
       dockerfile: worker/Dockerfile
+      args:
+        DOWNLOAD_EMBEDDING_MODEL: ${DOWNLOAD_EMBEDDING_MODEL:-1}
+        HF_TOKEN: ${HF_TOKEN:-}
     restart: always
     env_file: .env
     volumes:

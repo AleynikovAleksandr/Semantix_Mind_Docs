@@ -26,10 +26,6 @@ COPY database ./database
 COPY worker ./worker
 COPY scripts ./scripts
 
-ARG DOWNLOAD_EMBEDDING_MODEL=1
-ARG HF_TOKEN
-RUN HF_TOKEN=${HF_TOKEN} DOWNLOAD_EMBEDDING_MODEL=${DOWNLOAD_EMBEDDING_MODEL} bash scripts/setup_worker_assets.sh
-
 RUN mkdir -p /app/uploads /app/core/logging
 
 EXPOSE 8000
